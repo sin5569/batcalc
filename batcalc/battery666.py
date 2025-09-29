@@ -1,61 +1,59 @@
+import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
+st.title("Калькулятор автономности LiFePO₄ батарей")
 
-batteries = {
-    "52,1В 5 кВт·ч": 5,         
-    "52,1В 10 кВт·ч": 10,
-    "52,1В 15 кВт·ч": 15,
-    "52,1В 20 кВт·ч": 20,
-}
+# --- Ввод параметров пользователем ---
+st.sidebar.header("Настройки батарей и нагрузки")
 
-loads = {
-    "250 Вт": 250,
-    "400 Вт": 400,
-    "550 Вт": 550,
-    "800 Вт": 800,
-    "1000 Вт": 1000,
-    "1500 Вт": 1500,
-    "2000 Вт": 2000,
-    "3000 Вт": 3000,
-}
+# Названия батарей
+battery_names = st.sidebar.text_area(
+    "Названия батарей (через запятую)", 
+    value="52.1В 5 кВтч, 52.1В 10 кВтч, 52.1В 15 кВтч, 52.1В 20 кВтч"
+).split(",")
 
-DOD = 0.8
+# Ёмкость батарей
+capacities = st.sidebar.text_area(
+    "Ёмкость батарей (кВт·ч, через запятую, в том же порядке)", 
+    value="5, 10, 15"
+).split(",")
+capacities = [float(c.strip()) for c in capacities]
 
+# DOD
+DOD = st.sidebar.slider("Глубина разряда (DOD, %)", 0, 100, 80) / 100
 
-df = pd.DataFrame(index=batteries.keys(), columns=loads.keys(), dtype=float)
+# Нагрузки
+loads_input = st.sidebar.text_area(
+    "Нагрузки (Вт, через запятую)", 
+    value="250,400,550,800,1000,1500,2000"
+)
+loads = [int(l.strip()) for l in loads_input.split(",")]
+
+# --- Расчёт часов работы ---
+batteries = {name.strip(): cap for name, cap in zip(battery_names, capacities)}
+df = pd.DataFrame(index=batteries.keys(), columns=[f"{l} Вт" for l in loads], dtype=float)
+
 for bat_name, bat_kwh in batteries.items():
     usable_wh = bat_kwh * 1000 * DOD
-    for load_name, load_w in loads.items():
-        df.loc[bat_name, load_name] = round(usable_wh / load_w, 2)
+    for load in loads:
+        df.loc[bat_name, f"{load} Вт"] = round(usable_wh / load, 2)
 
+# --- Построение графика ---
+st.subheader("График часов автономной работы")
 df_plot = df.T
 
+fig, ax = plt.subplots(figsize=(10, 5))
+df_plot.plot(kind='bar', ax=ax, rot=0)
+ax.set_ylabel("Часы автономной работы")
+ax.set_xlabel("Нагрузка")
+ax.set_title(f"Сравнение времени автономной работы батарей (LiFePO₄, DOD {int(DOD*100)}%)")
+ax.grid(axis='y', linestyle='--', linewidth=0.5)
+st.pyplot(fig)
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), gridspec_kw={'height_ratios': [3, 1]})
-
-
-bars = df_plot.plot(kind='bar', rot=0, ax=ax1,
-                    ylabel="Часы автономной работы",
-                    xlabel="Нагрузка", legend=True)
-ax1.set_title("Сравнение времени автономной работы для LiFePO₄ батарей при DOD 80%")
-ax1.grid(axis='y', linestyle='--', linewidth=0.5)
-
-
-for container in bars.containers:
-    bars.bar_label(container, fmt="%.1f", fontsize=8)
-
-
-ax2.axis("off") 
-tbl = ax2.table(cellText=df.values,
-                rowLabels=df.index,
-                colLabels=df.columns,
-                cellLoc='center',
-                loc='center')
-
-tbl.auto_set_font_size(False)
-tbl.set_fontsize(9)
-tbl.scale(1.2, 1.4)
+# --- Таблица под графиком ---
+st.subheader("Таблица часов автономной работы")
+st.dataframe(df)
 
 plt.tight_layout()
 plt.savefig("battery_autonomy_graph_and_table_dod80.png")
