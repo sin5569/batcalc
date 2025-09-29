@@ -1,6 +1,5 @@
 streamlit
 pandas
-matplotlib
 pydeck
 folium
 streamlit-folium
